@@ -23,6 +23,7 @@ const connection = mysql. createConnection({  //커넥션변수에 mysql변수�
 connection.connect();   // (위에 선언한 객체들을 가진)커넥션변수의 connect() 메소드를 호출하면 DB에 접속이 됨
 
 
+
 const {
     OPCUAServer,
     OPCUACertificateManager,
@@ -332,16 +333,17 @@ const paths = envPaths(productUri);
                                 browseName: n,
                                 nodeId: "ns=1;s="+n,
                                 dataType: _dataType,
-                                value: new Variant({ dataType: dataType, value: defaultValue })
-                                // value: {
-                                //     get: function () {
-                                //         return new Variant({dataType: dataType, value: defaultValue });
-                                //     },
-                                //     set: function (variant) {
-                                //         variable2 = parseFloat(variant.value);
-                                //         return StatusCodes.Good;
-                                //     }
-                                // }
+                                // value: new Variant({ dataType: dataType, value: defaultValue })
+                                value: {
+                                    get: function () {
+                                        return new Variant({dataType: dataType, value: defaultValue });
+                                    },
+                                    set: function (variant) {
+                                        // variable2 = parseFloat(variant.value);
+                                        console.log("Client SET Value nodeName : ",n+" / Value : "+variant.value);                                        
+                                        return StatusCodes.Good;
+                                    }
+                                }
                             });
                         } catch (err) {
                             return err;
@@ -386,16 +388,17 @@ const paths = envPaths(productUri);
                                     browseName: n,                                    
                                     nodeId: "ns=1;s=DEV"+turbineOriginTables[j].dev_id+"-"+n,
                                     dataType: _dataType,
-                                    value: new Variant({ dataType: dataType, value: defaultValue })
-                                    // value: {
-                                    //     get: function () {
-                                    //         return new Variant({dataType: dataType, value: defaultValue });
-                                    //     },
-                                        // set: function (variant) {
-                                        //     variable2 = parseFloat(variant.value);
-                                        //     return StatusCodes.Good;
-                                        // }
-                                    // }
+                                    // value: new Variant({ dataType: dataType, value: defaultValue })
+                                    value: {
+                                        get: function () {
+                                            return new Variant({dataType: dataType, value: defaultValue });
+                                        },
+                                        set: function (variant) {
+                                            // variable2 = parseFloat(variant.value);
+                                            console.log("Client SET Value nodeName : ",n+" / Value : "+variant.value);                                        
+                                            return StatusCodes.Good;
+                                        }
+                                    }
                                 });
                             } catch (err) {
                                 return err;

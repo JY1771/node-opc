@@ -10,8 +10,6 @@ const chalk = require("chalk");
 const yargs = require("yargs/yargs");
 const envPaths = require("env-paths");
 
-
-
 const mysql = require('mysql'); // mysql 변수에 mysql 모듈을 할당
 const connection = mysql. createConnection({  //커넥션변수에 mysql변수에 있는 크리에이드커넥션 메소드를 호출(객체를 받음) 할당
     host    : '127.0.0.1',   //host객체 - 마리아DB가 존재하는 서버의 주소
@@ -45,7 +43,7 @@ const {
 const {
     build_address_space_for_conformance_testing,
 }= require("node-opcua-address-space-for-conformance-testing");
-const { result } = require("underscore");
+const { result, values } = require("underscore");
 
 Error.stackTraceLimit = Infinity;
 
@@ -296,6 +294,23 @@ const paths = envPaths(productUri);
 
         await makeTurbineOriginTables();
 
+        let mappingInfo = {};
+
+        const getMappingInfo = () =>{
+            connection.query('SELECT mapping FROM tb_mapping where model = "doosan-01"', function(error, results, fields){          
+                if (error) {
+                    console.log(error);
+                    return null;
+                } //에러에 값이 있다면 에러값을 콘솔에 출력
+
+                
+                if(results.length > 0){
+                    mappingInfo = results[0].mapping;                    
+                }
+            });
+        }
+        await getMappingInfo();
+
 
         /*
          * letiation 0:
@@ -305,6 +320,7 @@ const paths = envPaths(productUri);
          * Use this letiation when the letiable has to be read or written by the OPCUA clients
          */
         
+        let columnNames = [];
 
         const makeUnifiledNodeList = async () => {
             connection.query('SELECT * FROM tb_unified_definition', function(error, results, fields){                
@@ -313,10 +329,15 @@ const paths = envPaths(productUri);
                     return null;
                 } 
                 
-                if(results.length > 0){                    
+                if(results.length > 0){                       
+
                     for(let i=0; i<results.length; i++){                    
+                        
                         try {
                             let n = String(results[i].ln) + '-' +String(results[i].name);
+
+                            columnNames.push(n);
+
                             let dt = results[i].attribute_name;
                             let _dataType = "Double";
                             let dataType = DataType.Double;
@@ -356,6 +377,9 @@ const paths = envPaths(productUri);
 
         await makeUnifiledNodeList();
 
+        
+        let values = [];
+        let ids = 0;
 
         const makeTurbinOriginNodeList = async (turbineOriginTables) => {
 
@@ -367,7 +391,8 @@ const paths = envPaths(productUri);
                         return null;
                     }       
 
-                    if(results.length > 0){                        
+                    if(results.length > 0){
+
                         for(let i=0; i<results.length; i++){                        
                             try {
                                 let n = String(results[i].Field);                                
@@ -396,6 +421,15 @@ const paths = envPaths(productUri);
                                         set: function (variant) {
                                             // variable2 = parseFloat(variant.value);
                                             console.log("Client SET Value nodeName : ",n+" / Value : "+variant.value);                                        
+                                            
+                                            values.push(variant.value);
+                                            ids = ids+1;
+
+                                            if(results.length == ids) {
+                                                insertData(columnNames, mappingInfo);                                                
+                                            }
+
+
                                             return StatusCodes.Good;
                                         }
                                     }
@@ -407,11 +441,64 @@ const paths = envPaths(productUri);
                     }
                 });
             }
+            
+        }
+
+        let insertData = (columnNames, mappingInfo) =>{
+            ids = 0;
+            let insertObj = {};
+    
+            for (const [key, value] of Object.entries(JSON.parse(mappingInfo))) {            
+                insertObj[key] = null;     
+            }
+    
+    
+            for(let i=0; i<columnNames.length; i++){        
+                loop : for (const [key, value] of Object.entries(JSON.parse(mappingInfo))) {                                           
+                    if(key == columnNames[i]){                    
+                        if(values[i] !== undefined) insertObj[key] = values[i];                                                
+    
+                        break loop;
+                    } 
+                }
+        
+            }
+    
+             let sql = "INSERT INTO tb_unifi_data_202303 (";
+    
+               for (const [key, value] of Object.entries(insertObj)) {
+                    sql = sql +"`"+key+ "`,";
+                }
+                
+                sql = sql.slice(0, -1);
+                sql = sql + ") VALUES (";
+              
+                for (const [key, value] of Object.entries(insertObj)) {
+                    sql = sql +value+ ",";
+                }
+    
+                sql = sql.slice(0, -1);
+                sql = sql+")"
+           
+    
+                // console.log(sql);
+            connection.query(sql , async (error, results) => {
+                if (error) {
+                    console.log(error);
+                    return null;
+                } //에러에 값이 있다면 에러값을 콘솔에 출력
+    
+                await console.log("데이터 인서트");            
+                values = [];           
+               
+            });
         }
 
     }
 
     post_initialize();
+
+    
 
 
     function dumpObject(node) {

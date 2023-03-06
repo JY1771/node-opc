@@ -118,7 +118,8 @@ if (securityPolicy === SecurityPolicy.Invalid) {
     throw new Error("Invalid securityPolicy");
 }
 
-const timeout = argv.timeout * 1000 || 20000;
+// const timeout = argv.timeout * 1000 || 20000;
+const timeout = 300000;
 
 const monitored_node = coerceNodeId(argv.node ||
     makeNodeId(VariableIds.Server_ServerStatus_CurrentTime));
@@ -815,45 +816,45 @@ async function main() {
 // await console.log(" ns=1;s=TEST value = " , dataValue3.toString());
 
 // setInterval(() => console.log(new Date()), 2000);
-// setInterval(() => {
-//     writeStart();    
-// }, 10000);//300000 : 5분
+setInterval(() => {
+    writeStart();    
+}, 10000);//300000 : 5분
 
-// let writeStart = () => {
-//     connection.query('SELECT dev_id FROM tb_turbine where model = "doosan-01"', function(error, results, fields){          
-//         if (error) {
-//             console.log(error);
-//             return null;
-//         } //에러에 값이 있다면 에러값을 콘솔에 출력
+let writeStart = () => {
+    connection.query('SELECT dev_id FROM tb_turbine where model = "doosan-01"', function(error, results, fields){          
+        if (error) {
+            console.log(error);
+            return null;
+        } //에러에 값이 있다면 에러값을 콘솔에 출력
         
-//         if(results.length > 0){
-//             let devId = -1;
-//             devId =  results[0].dev_id;            
+        if(results.length > 0){
+            let devId = -1;
+            devId =  results[0].dev_id;            
     
-//             if(devId > 0){
-//                 writeNodes(devId);
-//             }
-//         }
-//     });
-
-// }
-
-
-connection.query('SELECT dev_id FROM tb_turbine where model = "doosan-01"', function(error, results, fields){          
-    if (error) {
-        console.log(error);
-        return null;
-    } //에러에 값이 있다면 에러값을 콘솔에 출력
-    
-    if(results.length > 0){
-        let devId = -1;
-        devId =  results[0].dev_id;            
-
-        if(devId > 0){
-            writeNodes(devId);
+            if(devId > 0){
+                writeNodes(devId);
+            }
         }
-    }
-});
+    });
+
+}
+
+
+// connection.query('SELECT dev_id FROM tb_turbine where model = "doosan-01"', function(error, results, fields){          
+//     if (error) {
+//         console.log(error);
+//         return null;
+//     } //에러에 값이 있다면 에러값을 콘솔에 출력
+    
+//     if(results.length > 0){
+//         let devId = -1;
+//         devId =  results[0].dev_id;            
+
+//         if(devId > 0){
+//             writeNodes(devId);
+//         }
+//     }
+// });
 
 
 let writeNodes = (devId) => {
@@ -943,7 +944,7 @@ let writeNodes = (devId) => {
                     the_subscription = null;
                     await s.terminate();
                     await the_session.close();
-                    connection.end();
+                    //connection.end();
                     await client.disconnect();
                     console.log(" Done ");
                     process.exit(0);
@@ -955,7 +956,7 @@ let writeNodes = (devId) => {
 
     console.log(" closing session");
     await the_session.close();
-    connection.end();
+    //connection.end();
     console.log(" session closed");
 
     console.log(" Calling disconnect");
@@ -983,7 +984,7 @@ process.on("SIGINT", async () => {
 
         await subscription.terminate();
         await the_session.close();
-        await connection.end();
+        await //connection.end();
         await client.disconnect();
         process.exit(0);
     }

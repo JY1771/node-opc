@@ -814,21 +814,29 @@ async function main() {
 // const dataValue3 = await the_session.readVariableValue("ns=1;s=TEST");
 // await console.log(" ns=1;s=TEST value = " , dataValue3.toString());
 
-connection.query('SELECT dev_id FROM tb_turbine where model = "vestas-01"', function(error, results, fields){          
-    if (error) {
-        console.log(error);
-        return null;
-    } //에러에 값이 있다면 에러값을 콘솔에 출력
-    
-    if(results.length > 0){
-        let devId = -1;
-        devId =  results[0].dev_id;            
+setInterval(() => {
+    writeStart();    
+}, 10000);//300000 : 5분
 
-        if(devId > 0){
-            writeNodes(devId);
+let writeStart = () => {
+    connection.query('SELECT dev_id FROM tb_turbine where model = "vestas-01"', function(error, results, fields){          
+        if (error) {
+            console.log(error);
+            return null;
+        } //에러에 값이 있다면 에러값을 콘솔에 출력
+        
+        if(results.length > 0){
+            let devId = -1;
+            devId =  results[0].dev_id;            
+    
+            if(devId > 0){
+                writeNodes(devId);
+            }
         }
-    }
-});
+    });
+
+}
+
 
 
 let writeNodes = (devId) => {

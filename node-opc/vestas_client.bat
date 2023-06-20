@@ -1,0 +1,1 @@
+node vestas_client.js -e "opc.tcp://192.168.1.7:26543"

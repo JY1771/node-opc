@@ -755,7 +755,7 @@ const paths = envPaths(productUri);
 
             if(mapInfos.length > 0 ){
                 
-                for(let a=0; a<mapInfos.length; a++){
+                loop2 : for(let a=0; a<mapInfos.length; a++){
 
                     let mappingInfo = mapInfos[a];
 
@@ -780,7 +780,7 @@ const paths = envPaths(productUri);
                 
                     }
         
-                    sendApi(sendObj, turbinId);//카프카
+                    // sendApi(sendObj, turbinId);//카프카
     
                     let now = new Date();  // 현재 날짜와 시간을 가져옴
                     let year = now.getFullYear().toString();  // 현재 연도를 문자열로 변환
@@ -827,7 +827,12 @@ const paths = envPaths(productUri);
                             values = [];           
                            
                         });
-                      });                    
+
+                      }); 
+                      
+                      break loop2;
+
+                      
                 }
             }
     

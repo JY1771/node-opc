@@ -118,7 +118,9 @@ if (securityPolicy === SecurityPolicy.Invalid) {
     throw new Error("Invalid securityPolicy");
 }
 
-const timeout = argv.timeout * 1000 || 20000;
+// const timeout = argv.timeout * 1000 || 20000;
+const timeout = 300000000;
+
 
 const monitored_node = coerceNodeId(argv.node ||
     makeNodeId(VariableIds.Server_ServerStatus_CurrentTime));
@@ -837,7 +839,10 @@ let writeStart = () => {
 
 }
 
-
+function generateRandomIncrement() {
+    let randomNumber = Math.floor(Math.random() * 199) + 500;
+    return randomNumber;
+}
 
 let writeNodes = (devId) => {
     connection.query("SHOW COLUMNS FROM wind_power.tb_vestas_origin_data", async (error, results) => {
@@ -856,7 +861,7 @@ let writeNodes = (devId) => {
                     let dt = results[i].Type;
                     let _dataType = "Double";
                     let variantDatatype = DataType.Double;
-                    let defaultValue =  Math.floor(Math.random() * 999);
+                    let defaultValue =  generateRandomIncrement();
                     
                     if(dt == "Boolean") {
                         _dataType = "Boolean";

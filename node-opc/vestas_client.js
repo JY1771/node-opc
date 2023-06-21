@@ -39,7 +39,7 @@ const {
     DataType
 } = require("node-opcua");
 const { toPem } = require("node-opcua-crypto");
-
+const iecCnt = 184;
 const mysql = require('mysql'); // mysql 변수에 mysql 모듈을 할당
 const connection = mysql. createConnection({  //커넥션변수에 mysql변수에 있는 크리에이드커넥션 메소드를 호출(객체를 받음) 할당
     host    : '127.0.0.1',   //host객체 - 마리아DB가 존재하는 서버의 주소
@@ -103,9 +103,9 @@ const argv = yargs(process.argv)
         alias: "D",
         describe: "specify the endpoint uri of discovery server (by default same as server endpoint uri)"
     })
-    .example("simple_client  --endpoint opc.tcp://localhost:49230 -P=Basic256Rsa256 -s=Sign", "")
-    .example("simple_client  -e opc.tcp://localhost:49230 -P=Basic256Sha256 -s=Sign -u JoeDoe -p P@338@rd ", "")
-    .example("simple_client  --endpoint opc.tcp://localhost:49230  -n=\"ns=0;i=2258\"", "")
+    .example("simple_client  --endpoint opc.tcp://localhost:26543 -P=Basic256Rsa256 -s=Sign", "")
+    .example("simple_client  -e opc.tcp://localhost:26543 -P=Basic256Sha256 -s=Sign -u JoeDoe -p P@338@rd ", "")
+    .example("simple_client  --endpoint opc.tcp://localhost:26543  -n=\"ns=0;i=2258\"", "")
     .argv;
 
 const securityMode = coerceMessageSecurityMode(argv.securityMode);
@@ -118,9 +118,8 @@ if (securityPolicy === SecurityPolicy.Invalid) {
     throw new Error("Invalid securityPolicy");
 }
 
-// const timeout = argv.timeout * 1000 || 20000;
-const timeout = 300000000;
-
+const timeout = argv.timeout * 1000 || 20000;
+let count = 0;
 
 const monitored_node = coerceNodeId(argv.node ||
     makeNodeId(VariableIds.Server_ServerStatus_CurrentTime));
@@ -818,7 +817,7 @@ async function main() {
 
 setInterval(() => {
     writeStart();    
-}, 10000);//300000 : 5분
+}, 7000);//300000 : 5분
 
 let writeStart = () => {
     connection.query('SELECT dev_id FROM tb_turbine where model = "vestas-01"', function(error, results, fields){          
@@ -839,10 +838,7 @@ let writeStart = () => {
 
 }
 
-function generateRandomIncrement() {
-    let randomNumber = Math.floor(Math.random() * 199) + 500;
-    return randomNumber;
-}
+
 
 let writeNodes = (devId) => {
     connection.query("SHOW COLUMNS FROM wind_power.tb_vestas_origin_data", async (error, results) => {
@@ -853,45 +849,117 @@ let writeNodes = (devId) => {
         }       
         
         
-        if(results.length > 0){                        
-            for(let i=0; i<results.length; i++){                        
-                try {
-                    let n = String(results[i].Field);                                
+        if(results.length > 0){      
+            
+            let wind_val = Math.round((((Math.sin(count)*5 +5) + Math.random()+3))*100)/100.0; 
+            
+            count = count+0.5; // count 더해서 sin 데이터 변환 (count가 클수록 sin 사이가 좁고, 작을 수록 sin 사이가 넓다)   
+            
+            let now = new Date();  // 현재 날짜와 시간을 가져옴
+            let year = now.getFullYear().toString();  // 현재 연도를 문자열로 변환
+            let month = (now.getMonth() + 1).toString().padStart(2, "0");  // 현재 월을 문자열로 변환하고 2자리로 만듦
+            let yyyyMM = year + month;  // yyyyMM 형식으로 포맷팅된 문자열        
+            let AP = wind_val;        
+
+            connection.query("SELECT `WTUR-TotWh` FROM tb_unifi_data_"+yyyyMM+" WHERE `TURBIN-ID` ="+devId+" ORDER BY updated DESC LIMIT 1", async (error2, results2) => {
+                if(results2.length > 0){
+                    let power_val = results2[0]['WTUR-TotWh'];
+                    AP = Math.round((power_val + ((wind_val * 2) / 60))*100)/100.0 ;
+                } 
+
+
+                for(let i=0; i<results.length; i++){                        
+                    try {
+                        let n = String(results[i].Field);                                
+        
+                        let dt = results[i].Type;
+                        let _dataType = "Double";
+                        let variantDatatype = DataType.Double;
+                        let defaultValue =  Math.floor(Math.random() * 999);
     
-                    let dt = results[i].Type;
-                    let _dataType = "Double";
-                    let variantDatatype = DataType.Double;
-                    let defaultValue =  generateRandomIncrement();
-                    
-                    if(dt == "Boolean") {
-                        _dataType = "Boolean";
-                        variantDatatype = DataType.Boolean;
-                        defaultValue = true;
-                    }
-                    
-                    let nodesToWrite = [{
-                        nodeId: "ns=1;s=DEV"+devId+"-"+n,
-                        attributeId: AttributeIds.Value,
-                        indexRange: null,
-                        value: { 
+                        if(n == "ACTIVE_POWER"){//유효전력
+                            defaultValue = wind_val * 2;
+                        } else if(n == "WT_STATUS"){//운전상태
+                            defaultValue = 1;
+                        } else if(n == "WIND_SPEED"){//풍속
+                            defaultValue = wind_val;
+                        }
+                         else if(n == "ACCUMULATED_POWER") {//누적전력
+                            defaultValue = AP;
+    
+                        }
+                        
+                        if(dt == "Boolean") {
+                            _dataType = "Boolean";
+                            variantDatatype = DataType.Boolean;
+                            defaultValue = true;
+                        }
+                        
+                        let nodesToWrite = [{
+                            nodeId: "ns=1;s=DEV"+devId+"-"+n,
+                            attributeId: AttributeIds.Value,
+                            indexRange: null,
                             value: { 
-                                dataType: _dataType,
-                                value: defaultValue
+                                value: { 
+                                    dataType: _dataType,
+                                    value: defaultValue
+                                }
                             }
-                        }
-                    }];
+                        }];
+        
+                        the_session.write(nodesToWrite, function(err,statusCode,diagnosticInfo) {
+                            if (!err) {
+                                console.log(" ----------------------------" );
+                                console.log(" write ok" );
+                                console.log("ns=1;s=DEV"+devId+"-"+n,":",defaultValue);
+                                console.log(statusCode);
+                            }
+                        }); 
+                    } catch (err) {
+                        return err;
+                    }
+                }      
+                
     
-                    the_session.write(nodesToWrite, function(err,statusCode,diagnosticInfo) {
-                        if (!err) {
-                            console.log(" write ok" );
-                            // console.log(diagnosticInfo);
-                            console.log(statusCode);
+                if(results.length < iecCnt) {//제안서 184개 이므로 실 데이터 컬럼이 184보다 작으면 맞춰주기
+                    let cnt = iecCnt - results.length;
+                    let temp = 1;
+    
+                    for(let j=0; j<cnt; j++) {
+                        try {
+                            let n = "F"+String(temp);                                
+            
+                            let _dataType = "Double";
+                            let defaultValue = -999;                       
+                          
+                            
+                            let nodesToWrite = [{
+                                nodeId: "ns=1;s=DEV"+devId+"-"+n,
+                                attributeId: AttributeIds.Value,
+                                indexRange: null,
+                                value: { 
+                                    value: { 
+                                        dataType: _dataType,
+                                        value: defaultValue
+                                    }
+                                }
+                            }];
+            
+                            the_session.write(nodesToWrite, function(err,statusCode,diagnosticInfo) {
+                                if (!err) {
+                                    console.log(" 추가데이터 write ok" );
+                                    console.log(diagnosticInfo);
+                                    console.log(statusCode);
+                                }
+                            });
+                            
+                            temp = temp + 1;
+                        } catch (err) {
+                            return err;
                         }
-                    }); 
-                } catch (err) {
-                    return err;
+                    }
                 }
-            }                       
+            });
         }
     });
 }
@@ -941,7 +1009,7 @@ let writeNodes = (devId) => {
 
     }
 
-    console.log(" closing session");
+    /*console.log(" closing session");
     await the_session.close();
     connection.end();
     console.log(" session closed");
@@ -950,7 +1018,7 @@ let writeNodes = (devId) => {
     await client.disconnect();
 
     console.log(chalk.cyan(" disconnected"));
-
+	*/
     console.log("success !!   ");
 }
 

@@ -32,6 +32,10 @@ let mapInfos = [];
 let columnNames = [];
 let columnIds = [];
 
+// let ids = 0;
+let ids = {};
+let iecCnt = 184;
+
 const {
     OPCUAServer,
     OPCUACertificateManager,
@@ -274,7 +278,7 @@ const paths = envPaths(productUri);
             \`WTUR-OpTmRs\` double DEFAULT NULL COMMENT '발전기 운전시간(vendor-specific) ',
             \`WTUR-StrCnt\` int(11) DEFAULT NULL COMMENT '발전기 운전수량(vendor-specific)',
             \`WTUR-StopCnt\` int(11) DEFAULT NULL COMMENT '발전기 정지수량(vendor-specific)',
-            \`WTUR-TotWh\` int(11) DEFAULT NULL COMMENT '누적 유효전력량(net)',
+            \`WTUR-TotWh\` double DEFAULT NULL COMMENT '누적 유효전력량(net)',
             \`WTUR-TotVArh\` double DEFAULT NULL COMMENT '누적 무효전력량(net)',
             \`WTUR-DmdWh\` double DEFAULT NULL COMMENT '유효전력량(demand)',
             \`WTUR-DmdVArH\` double DEFAULT NULL COMMENT '무효전력량(demand)',
@@ -520,12 +524,18 @@ const paths = envPaths(productUri);
 
                 
                 if(results.length > 0){
+                    let organized = "";
+                    let devId = 0; 
+
                     for(let i=0; i<results.length; i++){
                         let o = namespace.addFolder(rootFolder.objects, { browseName: String(results[i].model) });                        
                         turbineOriginTables.push({"organized" : o , "data_table" : String(results[i].data_table), "dev_id" : results[i].dev_id});
+                        ids[results[i].dev_id] = 0;
+                        organized = 0;
+                        devId = results[i].dev_id;
+                        tempTurbinNodeList(organized, devId);               
                     }
-
-                    makeTurbinOriginNodeList(turbineOriginTables);                    
+                    makeTurbinOriginNodeList(turbineOriginTables);     
                 }
                 });
               });
@@ -657,6 +667,49 @@ const paths = envPaths(productUri);
                                 return err;
                             }                        
                         }
+
+                            let resultCnt = iecCnt;//성능평가 임시 데이터 (실 데이터가 184보다 작을경우 활용)
+                            let temp = 1;
+            
+                            for(let j=0; j<resultCnt; j++) {
+                                try {
+                                    let n = "F"+String(temp);          
+                                    columnNames.push(n);
+                                    columnIds.push(n);
+        
+                                    let _dataType = "Double";
+                                    let dataType = DataType.Double;
+                                    let defaultValue = 0;
+                                    
+                                    console.log("Data Map info check no. ",cnt+" : ",n);
+        
+                                    cnt = cnt + 1
+        
+                                    namespace.addVariable({
+                                        organizedBy: IEC61400,
+                                        browseName: n,
+                                        nodeId: "ns=1;s="+n,
+                                        dataType: _dataType,
+                                        // value: new Variant({ dataType: dataType, value: defaultValue })
+                                        value: {
+                                            get: function () {
+                                                return new Variant({dataType: dataType, value: defaultValue });
+                                            },
+                                            set: function (variant) {
+                                                // variable2 = parseFloat(variant.value);
+                                                // console.log("Client SET Value nodeName : ",n+" / Value : "+variant.value);                                        
+                                                return StatusCodes.Good;
+                                            }
+                                        }
+                                    });
+
+                                    temp = temp + 1;
+
+                                } catch (err) {
+                                    return err;
+                                }   
+                            }
+
                         
                     }
                 });    
@@ -667,11 +720,10 @@ const paths = envPaths(productUri);
         await makeUnifiledNodeList();
 
         
-        let values = [];
-        let ids = 0;
+        let values = {};
 
-        const makeTurbinOriginNodeList = async (turbineOriginTables) => {            
-
+        const makeTurbinOriginNodeList = async (turbineOriginTables) => {  
+            
             for(let j=0; j<turbineOriginTables.length; j++){
 
                 pool.getConnection((err, connection) => {
@@ -717,17 +769,19 @@ const paths = envPaths(productUri);
                                             },
                                             set: function (variant) {
                                                 // variable2 = parseFloat(variant.value);
-                                                // console.log("Client SET Value nodeName : ",n+" / Value : "+variant.value);                                        
-                                                
-                                                values.push(variant.value);
-                                                ids = ids+1;
+                                                // console.log("...Client SET Value nodeName : ",n+" / Value : "+variant.value); 
+                                
+                                                values[n] = variant.value;                                            
+
+                                                ids[turbineOriginTables[j].dev_id] = ids[turbineOriginTables[j].dev_id]+1;
     
-                                                console.log("Turbin id : "+turbineOriginTables[j].dev_id+" / Data Convert no."+ids+" complete. value : "+n);
+                                                console.log("Turbin id : "+turbineOriginTables[j].dev_id+" / Data Convert no."+ids[turbineOriginTables[j].dev_id]+" complete. value : "+n);
     
-                                                if(results.length == ids) {
+                                                if(results.length == ids[turbineOriginTables[j].dev_id]) {
                                                     insertData(turbineOriginTables[j].dev_id);                                                
                                                 }
     
+                                                if( ids[turbineOriginTables[j].dev_id] == iecCnt) ids[turbineOriginTables[j].dev_id] = 0;
     
                                                 return StatusCodes.Good;
                                             }
@@ -738,40 +792,100 @@ const paths = envPaths(productUri);
                                 }
                             }                       
                         }
+                       
                     });
                   });
 
             }
+           
+            }
             
+        
+
+
+        const tempTurbinNodeList = async(organized, devId) => {
+            let temp = 1;
+
+            for(let k=0; k<iecCnt; k++) {
+                try {
+                    let n = "F"+String(temp);                                
+                    let _dataType = "Double";
+                    let dataType = DataType.Double;
+                    let defaultValue = -999;
+                    
+                    
+                    await namespace.addVariable({
+                        organizedBy: organized,
+                        browseName: n,                                    
+                        nodeId: "ns=1;s=DEV"+devId+"-"+n,
+                        dataType: _dataType,
+                        // value: new Variant({ dataType: dataType, value: defaultValue })
+                        value: {
+                            get: function () {
+                                return new Variant({dataType: dataType, value: defaultValue });
+                            },
+                            set: function (variant) {
+                                // variable2 = parseFloat(variant.value);
+                                // console.log("Client SET Value nodeName : ",n+" / Value : "+variant.value);                                        
+                                
+                                // values.push(variant.value);
+                                ids[devId] = ids[devId]+1;
+
+                                console.log("Turbin id : "+devId+" / Data Convert no."+ids[devId]+" complete. value : "+n);
+
+                                // if(results.length == ids) {
+                                //     insertData(turbineOriginTables[j].dev_id);                                                
+                                // }
+
+                                if( ids[devId] == iecCnt) ids[devId] = 0;
+                                
+                                return StatusCodes.Good;
+                            }
+                        }
+                      
+                    });
+
+                    temp = temp + 1;
+                } catch (err) {
+                    return err;
+                }
         }
+    }
+
 
         let insertData = (turbinId) =>{
             const date = new Date();                   
-            console.log('---------------- Received & Convert locale time (ko-kr): ' + date.toLocaleString('ko-kr')+"----------------");
-
-            ids = 0;
+            // console.log(values);
+            
             let insertObj = {};
             let sendObj = {};
+
+            // console.log("mapInfos : ",mapInfos);
 
             if(mapInfos.length > 0 ){
                 
                 loop2 : for(let a=0; a<mapInfos.length; a++){
 
                     let mappingInfo = mapInfos[a];
+                    // console.log("mappingInfo : ",mappingInfo)
 
                     for (const [key, value] of Object.entries(mappingInfo)) {            
                         insertObj[key] = null;     
                     }            
             
                     
-                    for(let i=0; i<columnNames.length; i++){        
+                    for(let i=0; i<columnNames.length; i++){    
+                        // console.log("columnNames[i] : ",columnNames[i]);
+    
                         loop : for (const [key, value] of Object.entries(mappingInfo)) {         
                             
+                            // console.log("value : ",value);
                             if(key == columnNames[i]){    
                                            
-                                if(values[i] !== undefined){                                    
-                                    insertObj[key] = values[i];                                                
-                                    sendObj[columnIds[i]] = values[i];
+                                if(values[value] !== undefined){                                    
+                                    insertObj[key] = values[value];                                                
+                                    sendObj[columnIds[i]] = values[value];
+                                    // console.log(key,"////",values[value]);
                                 } 
             
                                 break loop;
@@ -780,7 +894,8 @@ const paths = envPaths(productUri);
                 
                     }
         
-                    // sendApi(sendObj, turbinId);//카프카
+                    sendApi(sendObj, turbinId);//카프카
+                    // sendApiTest();
     
                     let now = new Date();  // 현재 날짜와 시간을 가져옴
                     let year = now.getFullYear().toString();  // 현재 연도를 문자열로 변환
@@ -799,6 +914,7 @@ const paths = envPaths(productUri);
                         sql = sql + ") VALUES (";
                                               
                         sql = sql +turbinId+ ",";
+
                         for (const [key, value] of Object.entries(insertObj)) {
                             sql = sql +value+ ",";
                         }
@@ -824,7 +940,7 @@ const paths = envPaths(productUri);
                             } //에러에 값이 있다면 에러값을 콘솔에 출력
                 
                             await console.log("데이터 인서트");            
-                            values = [];           
+                            values = {};           
                            
                         });
 
@@ -836,6 +952,9 @@ const paths = envPaths(productUri);
                 }
             }
     
+
+            console.log('---------------- Received & Convert locale time (ko-kr): ' + date.toLocaleString('ko-kr')+"----------------");
+
         }
 
         let timestamp = () => {
@@ -853,7 +972,6 @@ const paths = envPaths(productUri);
             data.time = time;
             data['TURBIN-ID'] = turbinId;
             
-            console.log(data);
             // console.log(data);
 
             fetch(`http://27.96.134.95:8082/topics/test-kafka`, {
@@ -882,6 +1000,47 @@ const paths = envPaths(productUri);
                 console.error(err);
               });
         }
+
+
+        // const sendApiTest = (data, turbinId) => {
+           
+        //     let status;
+        //     let response;
+        //     let time = timestamp();
+        //     data.time = time;
+        //     data['TURBIN-ID'] = turbinId;
+            
+        //     console.log(data);
+        //     // console.log(data);
+
+        //     fetch(`http://27.96.134.95:3001/api/turbinpred`, {
+        //         headers : {
+        //             "Content-Type": "application/vnd.kafka.json.v2+json",
+        //             "Accept": "application/vnd.kafka.v2+json"
+        //         },
+        //         method: "POST",
+        //         body: JSON.stringify({
+        //             "records": [
+        //                 {
+        //                     "startTime" : "2020-08-01 00:00:00",
+        //                     "turbinID" : 8,
+        //                     "offset": 10
+        //                 }
+        //             ]
+        //         }),
+        //     })
+        //     .then((res) => { 
+        //         status = res.status; 
+        //         response = res;
+        //         return res.json() 
+        //       })
+        //       .then((jsonResponse) => {                
+        //         console.log("::::::CALL API ::: status : ",status," : time : ",time, " : response : ",response);
+        //       })
+        //       .catch((err) => {
+        //         console.error(err);
+        //       });
+        // }
 
     }
 
@@ -964,7 +1123,7 @@ const paths = envPaths(productUri);
     server.on("session_closed", function (session, reason) {
         console.log(" SESSION CLOSED :", reason);
         // console.log(chalk.cyan("              session name: "), session.sessionName ? session.sessionName.toString() : "<null>");
-        connection.end();
+        // connection.end();
     });
 
     function w(s, w) {
